@@ -1,0 +1,23 @@
+# 私密資料
+.env
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+backtest/__pycache__/
+
+# Node
+node_modules/
+
+# IDE
+.vscode/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

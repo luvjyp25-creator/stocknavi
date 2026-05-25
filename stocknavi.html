@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StockNavi — AI 智能選股</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+  <style>
+    :root {
+      --bg: #F4F6FB;
+      --surface: #FFFFFF;
+      --border: #F0F2F5;
+      --blue: #3B82F6;
+      --blue-dk: #2563EB;
+      --blue-lt: #EFF6FF;
+      --text-1: #0F172A;
+      --text-2: #334155;
+      --text-3: #64748B;
+      --text-4: #94A3B8;
+      --green: #22C55E;
+      --green-dk: #15803D;
+      --green-lt: #F0FDF4;
+      --amber: #F59E0B;
+      --amber-lt: #FFFBEB;
+      --red: #EF4444;
+      --sidebar-w: 148px;
+      --header-h: 64px;
+      --shadow: 0 2px 12px rgba(15,23,42,.06), 0 6px 24px rgba(15,23,42,.04);
+      --shadow-sm: 0 1px 6px rgba(15,23,42,.06);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, 'PingFang TC', sans-serif;
+      background: var(--bg);
+      color: var(--text-1);
+      min-height: 100vh;
+    }
+    svg { display: block; }
+
+    /* ── App shell ── */
+    .app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0 16px;
+      overflow-y: auto;
+    }
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 16px 20px;
+    }
+    .brand-icon {
+      width: 44px; height: 44px;
+      background: var(--blue);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      color: white;
+      flex-shrink: 0;
+    }
+    .brand-icon svg { width: 22px; height: 22px; }
+    .nav-top { flex: 1; padding: 0 10px; display: flex; flex-direction: column; gap: 2px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 13px; color: var(--text-3);
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: #F8FAFC; color: var(--text-1); }
+    .nav-item.active { background: var(--blue-lt); color: var(--blue); font-weight: 600; }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .nav-bottom {
+      padding: 12px 10px 0;
+      border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .sidebar-avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: #DBEAFE;
+      display: flex; align-items: center; justify-content: center;
+      margin: 10px auto 0; cursor: pointer;
+    }
+    .sidebar-avatar svg { width: 16px; height: 16px; color: var(--blue); }
+
+    /* ── Main ── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+    /* ── Top bar ── */
+    .topbar {
+      height: var(--header-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      flex-shrink: 0;
+    }
+    .topbar-brand-name { font-size: 17px; font-weight: 800; color: var(--text-1); }
+    .topbar-brand-sub { font-size: 11px; color: var(--text-4); margin-top: 1px; }
+    .search-bar {
+      display: flex; align-items: center; gap: 8px;
+      background: #F8FAFC;
+      border: 1px solid #E2E8F0;
+      border-radius: 10px;
+      padding: 9px 16px;
+      width: 320px;
+      font-size: 13px; color: var(--text-4);
+      cursor: text;
+    }
+    .search-bar svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .icon-btn {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: #F8FAFC;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; border: none;
+      transition: background .15s;
+    }
+    .icon-btn:hover { background: #F1F5F9; }
+    .icon-btn svg { width: 17px; height: 17px; color: var(--text-3); }
+
+    /* ── Scroll content ── */
+    .content {
+      flex: 1; overflow-y: auto;
+      padding: 24px 28px 48px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+
+    /* ── Hero card ── */
+    .hero-card {
+      background: linear-gradient(175deg, #E8F3FF 0%, #FFFFFF 65%);
+      border: 1px solid #DBEAFE;
+      border-radius: 16px;
+      padding: 28px 32px;
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 24px;
+      box-shadow: var(--shadow);
+    }
+    .hero-left { display: flex; flex-direction: column; gap: 14px; flex: 1; }
+    .hero-top-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+    }
+    .ai-label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 600; color: var(--blue);
+    }
+    .ai-label svg { width: 13px; height: 13px; }
+    .hero-date { font-size: 12px; color: var(--text-4); }
+    .hero-headline { font-size: 38px; font-weight: 800; line-height: 1.15; }
+    .hero-sub { font-size: 16px; color: var(--text-2); }
+    .hero-chip {
+      display: inline-flex; align-items: center;
+      background: var(--blue-lt); color: var(--blue);
+      font-size: 12px; font-weight: 500;
+      padding: 6px 14px; border-radius: 999px;
+      width: fit-content;
+    }
+    .hero-pills { display: flex; gap: 10px; flex-wrap: wrap; }
+    .pill {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 999px; font-size: 13px;
+    }
+    .pill.green { background: var(--green-lt); color: var(--green-dk); border: 1px solid #BBF7D0; }
+    .pill.blue  { background: var(--blue-lt);  color: var(--blue-dk);  border: 1px solid #BFDBFE; }
+    .pill-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    .pill svg { width: 13px; height: 13px; }
+    .hero-cta {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--blue); color: white;
+      font-size: 14px; font-weight: 600;
+      padding: 12px 24px; border-radius: 12px;
+      cursor: pointer; width: fit-content;
+      box-shadow: 0 4px 14px rgba(59,130,246,.35);
+      transition: background .15s, transform .12s;
+      border: none; text-decoration: none;
+    }
+    .hero-cta:hover { background: var(--blue-dk); transform: translateY(-1px); }
+    .hero-cta svg { width: 14px; height: 14px; }
+    .hero-illus {
+      flex-shrink: 0; width: 220px; height: 180px;
+      background: var(--blue-lt); border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .hero-illus svg { width: 72px; height: 72px; color: var(--blue); opacity: .65; }
+
+    /* ── KPI grid ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 18px 14px;
+      display: flex; flex-direction: column; gap: 7px;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow .2s, transform .15s;
+      cursor: default;
+    }
+    .kpi-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+    .kpi-card.growth { background: #FAFAFF; border-color: #EDE9FE; }
+    .kpi-card.market { background: #FFFAFC; border-color: #FCE7F3; }
+    .kpi-card.signal { background: #FAFFF8; border-color: #DCFCE7; }
+    .kpi-card.warning{ background: #FFFDF5; border-color: #FEF3C7; }
+    .kpi-header { display: flex; align-items: center; justify-content: space-between; }
+    .kpi-label  { font-size: 11px; color: var(--text-4); }
+    .kpi-icon {
+      width: 28px; height: 28px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .kpi-icon svg { width: 14px; height: 14px; }
+    .kpi-icon.purple { background: #F5F3FF; color: #7C3AED; }
+    .kpi-icon.blue   { background: var(--blue-lt); color: var(--blue); }
+    .kpi-icon.green  { background: var(--green-lt); color: var(--green); }
+    .kpi-icon.amber  { background: var(--amber-lt); color: var(--amber); }
+    .kpi-value { font-size: 19px; font-weight: 700; color: var(--text-1); }
+    .kpi-sub   { font-size: 12px; }
+    .kpi-sub.green { color: var(--green-dk); }
+    .kpi-sub.blue  { color: #1D4ED8; }
+    .kpi-sub.amber { color: #92400E; }
+    .sparkline { width: 100%; height: 36px; margin-top: 2px; }
+    .sparkline svg { width: 100%; height: 100%; }
+
+    /* ── Stock section ── */
+    .stock-section { display: flex; flex-direction: column; gap: 14px; }
+    .stock-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .section-title-row { display: flex; align-items: center; gap: 10px; }
+    .section-title { font-size: 16px; font-weight: 700; }
+    .count-badge {
+      background: var(--blue-lt); color: var(--blue);
+      font-size: 11px; font-weight: 600;
+      padding: 3px 10px; border-radius: 12px;
+    }
+    .filter-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: #F8FAFC; border: 1px solid #E2E8F0;
+      border-radius: 8px; padding: 8px 14px;
+      font-size: 12px; color: var(--text-3);
+      cursor: pointer; transition: background .15s;
+    }
+    .filter-btn:hover { background: #F1F5F9; }
+    .filter-btn svg { width: 13px; height: 13px; }
+
+    /* ── Tribe tabs ── */
+    .tribe-tabs {
+      display: flex; align-items: center; gap: 2px;
+      border-bottom: 1px solid #E2E8F0;
+      padding-bottom: 0;
+    }
+    .tab-item {
+      display: flex; align-items: center; gap: 5px;
+      padding: 9px 16px;
+      font-size: 13px; color: var(--text-3);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color .15s;
+      border-radius: 6px 6px 0 0;
+    }
+    .tab-item:hover { color: var(--text-1); background: #F8FAFC; }
+    .tab-item.active {
+      color: var(--blue); font-weight: 700;
+      border-bottom-color: var(--blue);
+      background: var(--blue-lt);
+    }
+
+    /* ── Stock list ── */
+    .stock-list { display: flex; flex-direction: column; gap: 12px; }
+    .stock-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex; flex-direction: column; gap: 12px;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow .2s, transform .15s;
+      cursor: pointer;
+    }
+    .stock-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+    .stock-row { display: flex; align-items: center; }
+    .stock-left {
+      display: flex; align-items: center; gap: 12px;
+      flex: 1; min-width: 0;
+    }
+    .stock-logo {
+      width: 42px; height: 42px; border-radius: 10px;
+      background: var(--blue-lt);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .stock-logo svg { width: 18px; height: 18px; color: var(--blue); }
+    .stock-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .stock-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .stock-name { font-size: 17px; font-weight: 700; }
+    .stock-meta { font-size: 12px; color: var(--text-4); }
+    .stock-desc { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stock-mid {
+      width: 440px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 5px;
+      padding: 0 24px;
+    }
+    .thermo-label-row {
+      display: flex; justify-content: space-between;
+      font-size: 11px; color: var(--text-4);
+    }
+    .thermo-val { font-weight: 600; }
+    .thermo-val.green { color: var(--green-dk); }
+    .thermo-val.red   { color: var(--red); }
+    .thermo-val.amber { color: #B45309; }
+    .thermo-track {
+      position: relative;
+      height: 10px; border-radius: 5px;
+      background: linear-gradient(to right, #22C55E 0%, #A3E635 25%, #FACC15 50%, #F97316 75%, #EF4444 100%);
+    }
+    .thermo-dot {
+      position: absolute;
+      top: 50%; transform: translate(-50%, -50%);
+      width: 14px; height: 14px; border-radius: 50%;
+      background: white;
+      box-shadow: 0 1px 5px rgba(0,0,0,.25);
+      border: 2px solid rgba(255,255,255,.9);
+    }
+    .thermo-ticks {
+      display: flex; justify-content: space-between;
+      font-size: 10px; color: #CBD5E1;
+    }
+    .stock-right {
+      width: 200px; flex-shrink: 0;
+      display: flex; align-items: center;
+      justify-content: flex-end; gap: 10px;
+    }
+    .stock-tag {
+      display: flex; align-items: center; gap: 5px;
+      padding: 5px 12px; border-radius: 999px;
+      font-size: 12px; font-weight: 500; white-space: nowrap;
+    }
+    .stock-tag.green { background: var(--green-lt); color: var(--green-dk); }
+    .stock-tag.amber { background: var(--amber-lt); color: #92400E; }
+    .stock-tag svg { width: 11px; height: 11px; }
+    .stock-score { font-size: 17px; font-weight: 700; white-space: nowrap; }
+    .stock-score.blue  { color: var(--blue); }
+    .stock-score.amber { color: var(--amber); }
+    .stock-arrow svg { width: 16px; height: 16px; color: #CBD5E1; }
+    .ai-note {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: #F8FAFC; border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px; color: var(--text-3); line-height: 1.5;
+    }
+    .ai-note svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--text-4); }
+
+    /* ── Mobile header ── */
+    .mobile-header {
+      display: none;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .mobile-logo-name { font-size: 18px; font-weight: 800; }
+    .mobile-logo-sub  { font-size: 11px; color: var(--text-4); margin-top: 1px; }
+
+    /* ── Mobile bottom nav ── */
+    .bottom-nav {
+      display: none;
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 10px 0 max(14px, env(safe-area-inset-bottom));
+      justify-content: space-around;
+      box-shadow: 0 -2px 12px rgba(0,0,0,.07);
+      z-index: 100;
+    }
+    .bnav-item {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      font-size: 10px; color: var(--text-4); cursor: pointer;
+      padding: 0 14px; transition: color .15s;
+    }
+    .bnav-item.active { color: var(--blue); }
+    .bnav-item svg { width: 22px; height: 22px; }
+
+    /* ── Server status badge ── */
+    .server-status {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 999px;
+      font-size: 11px; font-weight: 500;
+      text-decoration: none; cursor: pointer;
+      transition: background .15s;
+      border: 1px solid transparent;
+    }
+    .server-status.online  { background: #F0FDF4; color: #15803D; border-color: #BBF7D0; }
+    .server-status.offline { background: #FEF2F2; color: #DC2626; border-color: #FECACA; }
+    .server-status.loading { background: #F8FAFC; color: var(--text-4); border-color: #E2E8F0; }
+    .server-status:hover { filter: brightness(.96); }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    }
+    .server-status.online  .status-dot { background: #22C55E; }
+    .server-status.offline .status-dot { background: #EF4444; }
+    .server-status.loading .status-dot { background: #CBD5E1; }
+    .server-status.online .status-dot  { animation: pulse-green 2s infinite; }
+    @keyframes pulse-green {
+      0%,100% { box-shadow: 0 0 0 0 #22C55E60; }
+      50%      { box-shadow: 0 0 0 4px #22C55E10; }
+    }
+
+    /* ── Loading state ── */
+    .loading-state {
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
+      padding: 48px 24px; color: var(--text-4);
+    }
+    .loading-spinner {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 3px solid #E2E8F0; border-top-color: var(--blue);
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 14px; color: var(--text-3); font-weight: 500; }
+    .loading-sub  { font-size: 12px; color: var(--text-4); }
+    .error-state {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 40px 24px; text-align: center;
+    }
+    .error-icon { font-size: 32px; }
+    .error-msg  { font-size: 14px; color: var(--red); font-weight: 500; }
+    .error-hint { font-size: 12px; color: var(--text-4); }
+    .error-cmd  { font-size: 12px; background: #F1F5F9; color: var(--text-2);
+                  padding: 8px 16px; border-radius: 8px; font-family: monospace; margin-top: 4px; }
+    .refresh-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--blue-lt); color: var(--blue);
+      border: 1px solid #BFDBFE; border-radius: 8px;
+      padding: 7px 14px; font-size: 12px; cursor: pointer;
+      transition: background .15s;
+    }
+    .refresh-btn:hover { background: #DBEAFE; }
+    .refresh-btn svg { width: 13px; height: 13px; }
+
+    /* ── 追蹤按鈕 ── */
+    .watch-btn {
+      background: none; border: none; font-size: 16px; cursor: pointer;
+      padding: 4px 6px; border-radius: 6px; line-height: 1; opacity: .55;
+      transition: opacity .15s, transform .15s;
+    }
+    .watch-btn:hover { opacity: 1; transform: scale(1.2); }
+
+    /* ── 自選清單卡片 ── */
+    .wl-logo { font-size: 18px; background: #FFFBEB !important; }
+    .wl-mid  { flex-direction: column; align-items: flex-start; gap: 3px; }
+    /* 族群來源標籤 */
+    .wl-tribe-badge {
+      display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600;
+    }
+    .tribe-growth   { background:#EFF6FF; color:#1D4ED8; }
+    .tribe-trend    { background:#F0FDF4; color:#15803D; }
+    .tribe-momentum { background:#FFF7ED; color:#C2410C; }
+    .tribe-dividend { background:#FDF4FF; color:#7E22CE; }
+
+    /* 今日燈號格狀排列 */
+    .wl-sig-grid {
+      display:flex; gap:6px; flex:1; justify-content:center; align-items:center;
+    }
+    .wl-sig-cell {
+      display:flex; flex-direction:column; align-items:center; gap:2px;
+      font-size:10px; color:var(--text-4); min-width:38px; text-align:center;
+      padding:4px 6px; border-radius:8px; background:#F8FAFC;
+    }
+    .wl-sig-cell b { font-size:12px; font-weight:700; }
+    .wl-sig-cell.signal-green  { background:#F0FDF4; color:#15803D; }
+    .wl-sig-cell.signal-yellow { background:#FFFBEB; color:#92400E; }
+    .wl-sig-cell.signal-red    { background:#FFF1F2; color:#9F1239; }
+    .wl-sig-cell.sig-empty b,
+    .sig-dash { color:#CBD5E1; font-size:11px; }
+
+    /* 加入時欄位 */
+    .wl-added-col { display:flex; flex-direction:column; gap:2px; min-width:140px; }
+    .wl-added-label { font-size:11px; color:var(--text-4); }
+    .wl-added-main  { font-size:12px; color:var(--text-2); }
+
+    /* 色點 */
+    .sig-dot { display:inline-block; width:7px; height:7px; border-radius:50%; vertical-align:middle; margin-right:2px; }
+    .dot-green  { background:#22C55E; }
+    .dot-yellow { background:#F59E0B; }
+    .dot-red    { background:#EF4444; }
+    .dot-gray   { background:#CBD5E1; }
+    .wl-sig-badge {
+      display: inline-block; padding: 1px 7px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; margin: 1px 2px;
+    }
+    .wl-sig-badge.signal-green  { background: #F0FDF4; color: #15803D; }
+    .wl-sig-badge.signal-yellow { background: #FFFBEB; color: #92400E; }
+    .wl-sig-badge.signal-red    { background: #FFF1F2; color: #9F1239; }
+    .wl-sig-badge.signal-gray   { background: #F1F5F9; color: #64748B; }
+    .wl-history-btn {
+      font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+      background: #F1F5F9; border: 1px solid #E2E8F0; color: var(--text-3);
+    }
+    .wl-history-btn:hover { background: #E2E8F0; }
+    .wl-remove-btn {
+      font-size: 13px; padding: 4px 8px; border-radius: 6px; cursor: pointer;
+      background: none; border: none; color: #CBD5E1;
+    }
+    .wl-remove-btn:hover { color: var(--red); }
+
+    /* ── 歷史燈號表格 ── */
+    .wl-history-panel { padding: 0 12px 12px; }
+    .hist-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .hist-table th { padding: 5px 8px; text-align: center; color: var(--text-4); font-weight: 500; border-bottom: 1px solid #F1F5F9; }
+    .hist-date { padding: 5px 8px; color: var(--text-3); white-space: nowrap; }
+    .hist-cell { padding: 5px 8px; text-align: center; border-radius: 4px; }
+    .hist-cell.signal-green  { color: #15803D; }
+    .hist-cell.signal-yellow { color: #92400E; }
+    .hist-cell.signal-red    { color: #9F1239; }
+    .hist-cell.signal-gray   { color: #94A3B8; }
+    .hist-empty { color: #CBD5E1; }
+    .hist-table tr:hover td { background: #F8FAFC; }
+
+    /* ── 績效統計面板 ── */
+    .acc-panel {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      padding: 12px 16px; background: #F8FAFC;
+      border-radius: 10px; margin-bottom: 12px; font-size: 12px;
+    }
+    .acc-item { display: flex; align-items: center; gap: 4px; }
+    .acc-tribe { background: #EFF6FF; color: #1D4ED8; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+    .acc-item .green { color: #15803D; font-weight: 700; }
+    .acc-item .red   { color: #DC2626; font-weight: 700; }
+
+    /* ── Responsive ── */
+    @media (max-width: 1024px) {
+      .stock-mid { width: 340px; padding: 0 16px; }
+    }
+    @media (max-width: 768px) {
+      .sidebar { display: none; }
+      .topbar  { display: none; }
+      .mobile-header { display: flex; }
+      .bottom-nav    { display: flex; }
+      .content { padding: 16px 16px 88px; gap: 14px; }
+      .hero-card { padding: 18px; }
+      .hero-headline { font-size: 28px; }
+      .hero-illus { display: none; }
+      .hero-cta { width: 100%; justify-content: center; }
+      .kpi-grid { grid-template-columns: repeat(2,1fr); gap: 10px; }
+      .kpi-value { font-size: 16px; }
+      .stock-row { flex-wrap: wrap; gap: 10px; }
+      .stock-mid { width: 100%; padding: 0; order: 3; }
+      .stock-right { width: auto; order: 2; margin-left: auto; }
+      .stock-left  { flex: 0 0 100%; }
+      .tribe-tabs  { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .tab-item    { white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+          <polyline points="16 7 22 7 22 13"/>
+        </svg>
+      </div>
+    </div>
+    <div class="nav-top">
+      <a class="nav-item active" data-nav="home"><i data-lucide="house"></i>首頁</a>
+      <a class="nav-item" data-nav="watchlist" onclick="switchToWatchlist()"><i data-lucide="star"></i>自選清單</a>
+      <a class="nav-item" data-nav="growth" onclick="switchTribe('growth')"><i data-lucide="trending-up"></i>成長族</a>
+      <a class="nav-item" data-nav="trend" onclick="switchTribe('trend')"><i data-lucide="chart-line"></i>趨勢族</a>
+      <a class="nav-item" data-nav="momentum" onclick="switchTribe('momentum')"><i data-lucide="zap"></i>短線族</a>
+      <a class="nav-item" data-nav="dividend" onclick="switchTribe('dividend')"><i data-lucide="house"></i>存股族</a>
+    </div>
+    <div class="nav-bottom">
+      <a class="nav-item"><i data-lucide="settings"></i>設定</a>
+      <a class="nav-item"><i data-lucide="info"></i>幫助</a>
+      <div class="sidebar-avatar"><i data-lucide="user"></i></div>
+    </div>
+  </nav>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- Mobile header -->
+    <div class="mobile-header">
+      <div>
+        <div class="mobile-logo-name">StockNavi ✦</div>
+        <div class="mobile-logo-sub">今天該買什麼？</div>
+      </div>
+      <button class="icon-btn"><i data-lucide="bell"></i></button>
+    </div>
+
+    <!-- Desktop topbar -->
+    <header class="topbar">
+      <div>
+        <div class="topbar-brand-name">StockNavi ✦</div>
+        <div class="topbar-brand-sub">AI 智能選股助理</div>
+      </div>
+      <div class="search-bar">
+        <i data-lucide="search"></i>今天該買什麼？
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <a href="/api/status" target="_blank" id="serverStatus" class="server-status offline" title="點擊查看後台狀態">
+          <span class="status-dot"></span><span class="status-text">連線中...</span>
+        </a>
+        <button class="icon-btn"><i data-lucide="bell"></i></button>
+      </div>
+    </header>
+
+    <!-- Scroll content -->
+    <main class="content">
+
+      <!-- Hero -->
+      <div class="hero-card">
+        <div class="hero-left">
+          <div class="hero-top-row">
+            <div class="ai-label"><i data-lucide="sparkles"></i>AI 今日建議</div>
+            <div class="hero-date">5月21日</div>
+          </div>
+          <div class="hero-headline">今日市場偏多</div>
+          <div class="hero-sub">成長股有機會，但別急著追高</div>
+          <div class="hero-chip">AI / 伺服器族群動能偏強</div>
+          <div class="hero-pills">
+            <div class="pill green"><div class="pill-dot"></div>今日 3 檔綠燈</div>
+            <div class="pill blue"><i data-lucide="activity"></i>市場偏樂觀</div>
+          </div>
+          <a class="hero-cta" href="#">查看推薦 <i data-lucide="arrow-right"></i></a>
+        </div>
+        <div class="hero-illus"><i data-lucide="trending-up"></i></div>
+      </div>
+
+      <!-- KPI row -->
+      <div class="kpi-grid">
+        <div class="kpi-card growth">
+          <div class="kpi-header">
+            <span class="kpi-label">成長股</span>
+            <div class="kpi-icon purple"><i data-lucide="chart-column-increasing"></i></div>
+          </div>
+          <div class="kpi-value" id="kpiGrowthVal">—</div>
+          <div class="kpi-sub green" id="kpiGrowthSub">載入中...</div>
+          <div class="sparkline">
+            <svg viewBox="0 0 190 40" fill="none" preserveAspectRatio="none">
+              <path d="M0 28 C35 22 60 32 95 16 C125 6 150 20 190 10 L190 40 L0 40Z" fill="#8B5CF610"/>
+              <path d="M0 28 C35 22 60 32 95 16 C125 6 150 20 190 10" stroke="#8B5CF6" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi-card market">
+          <div class="kpi-header">
+            <span class="kpi-label">市場情緒</span>
+            <div class="kpi-icon blue"><i data-lucide="activity"></i></div>
+          </div>
+          <div class="kpi-value" id="kpiSentimentVal">—</div>
+          <div class="kpi-sub blue" id="kpiSentimentSub">載入加權指數...</div>
+          <div class="sparkline">
+            <svg viewBox="0 0 190 40" fill="none" preserveAspectRatio="none">
+              <path d="M0 16 C28 8 52 28 80 18 C108 8 135 24 190 14 L190 40 L0 40Z" fill="#10B98112"/>
+              <path d="M0 16 C28 8 52 28 80 18 C108 8 135 24 190 14" stroke="#10B981" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi-card signal">
+          <div class="kpi-header">
+            <span class="kpi-label">今日訊號</span>
+            <div class="kpi-icon green"><i data-lucide="zap"></i></div>
+          </div>
+          <div class="kpi-value" id="kpiSignalVal">—</div>
+          <div class="kpi-sub green" id="kpiSignalSub">計算中...</div>
+          <div class="sparkline">
+            <svg viewBox="0 0 190 40" fill="none" preserveAspectRatio="none">
+              <path d="M0 26 C38 26 60 12 90 14 C120 16 148 8 190 5 L190 40 L0 40Z" fill="#22C55E10"/>
+              <path d="M0 26 C38 26 60 12 90 14 C120 16 148 8 190 5" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi-card warning">
+          <div class="kpi-header">
+            <span class="kpi-label">需注意</span>
+            <div class="kpi-icon amber"><i data-lucide="triangle-alert"></i></div>
+          </div>
+          <div class="kpi-value" id="kpiWarnVal">—</div>
+          <div class="kpi-sub amber" id="kpiWarnSub">計算中...</div>
+          <div class="sparkline">
+            <svg viewBox="0 0 190 40" fill="none" preserveAspectRatio="none">
+              <path d="M0 8 C32 8 55 18 85 18 C115 18 145 26 190 30 L190 40 L0 40Z" fill="#F59E0B10"/>
+              <path d="M0 8 C32 8 55 18 85 18 C115 18 145 26 190 30" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock section -->
+      <div class="stock-section">
+        <div class="stock-section-header">
+          <div class="section-title-row">
+            <span class="section-title">成長族 篩選清單</span>
+            <span class="count-badge">6 檔</span>
+          </div>
+          <button class="refresh-btn" id="refreshBtn" onclick="refreshData()"><i data-lucide="refresh-cw"></i>重新整理</button>
+        </div>
+
+        <div class="tribe-tabs">
+          <div class="tab-item" data-tribe="dividend">🏠 存股族</div>
+          <div class="tab-item active" data-tribe="growth">📈 成長族</div>
+          <div class="tab-item" data-tribe="trend">📊 趨勢族</div>
+          <div class="tab-item" data-tribe="momentum">⚡ 短線族</div>
+          <div class="tab-item" data-tribe="watchlist">⭐ 自選清單</div>
+        </div>
+
+        <div class="stock-list" id="stockList">
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">載入中，首次約需 30 秒...</div>
+            <div class="loading-sub">正在從 FinMind 取得即時資料</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Mobile bottom nav -->
+<nav class="bottom-nav">
+  <div class="bnav-item active"><i data-lucide="house"></i>首頁</div>
+  <div class="bnav-item"><i data-lucide="user"></i>我的</div>
+  <div class="bnav-item"><i data-lucide="history"></i>回測</div>
+  <div class="bnav-item"><i data-lucide="settings"></i>設定</div>
+</nav>
+
+<script>
+const TRIBE_NAMES = { dividend:'存股族', growth:'成長族', trend:'趨勢族', momentum:'短線族' };
+const TRIBE_ICONS = {
+  growth:   'chart-column-increasing',
+  trend:    'trending-up',
+  momentum: 'zap',
+  dividend: 'piggy-bank',
+};
+const THERMO_LABEL = {
+  growth:   '估值溫度計',
+  dividend: '估值溫度計',
+  trend:    '估值溫度計',
+  momentum: '收盤位置',
+};
+
+let currentTribe = 'growth';
+
+// ── 渲染股票卡片 ──────────────────────────────────────
+function renderStocks(stocks, tribe) {
+  const list = document.getElementById('stockList');
+  if (!stocks || !stocks.length) {
+    list.innerHTML = `<div class="loading-state"><div class="error-icon">📭</div>
+      <div class="loading-text">目前無符合條件的股票</div></div>`;
+    lucide.createIcons();
+    return;
+  }
+
+  const iconMap = { green:'trending-up', yellow:'minus', amber:'minus', red:'flame', gray:'minus' };
+  const scoreColorMap = { green:'blue', yellow:'blue', amber:'amber', red:'amber', gray:'amber' };
+
+  list.innerHTML = stocks.map(s => `
+    <div class="stock-card">
+      <div class="stock-row">
+        <div class="stock-left">
+          <div class="stock-logo">
+            <i data-lucide="${TRIBE_ICONS[tribe] || 'building'}"></i>
+          </div>
+          <div class="stock-info">
+            <div class="stock-name-row">
+              <span class="stock-name">${s.name}</span>
+              <span class="stock-meta">${s.id} · ${s.sector}</span>
+            </div>
+            <div class="stock-desc">${s.desc || ''}</div>
+          </div>
+        </div>
+        <div class="stock-mid">
+          <div class="thermo-label-row">
+            <span>${THERMO_LABEL[tribe] || '溫度計'}</span>
+            <span class="thermo-val ${s.thermoColor}">${s.thermoLabel}</span>
+          </div>
+          <div class="thermo-track">
+            <div class="thermo-dot" style="left:${s.thermoPct}%"></div>
+          </div>
+          <div class="thermo-ticks"><span>極低</span><span>合理</span><span>偏熱</span></div>
+        </div>
+        <div class="stock-right">
+          <div class="stock-tag ${s.tagColor}">
+            <i data-lucide="${iconMap[s.signal] || 'minus'}"></i>${s.tag}
+          </div>
+          <div class="stock-score ${scoreColorMap[s.signal] || 'blue'}">${s.score}分</div>
+          <button class="watch-btn" onclick="addToWatchlist('${s.id}','${s.name}',currentTribe)" title="加入自選清單">⭐</button>
+        </div>
+      </div>
+      ${s.aiNote ? `
+        <div class="ai-note">
+          <i data-lucide="bot"></i>${s.aiNote}
+        </div>` : ''}
+    </div>
+  `).join('');
+  lucide.createIcons();
+}
+
+// ── 加入自選清單 ─────────────────────────────────────
+async function addToWatchlist(id, name, tribe) {
+  try {
+    const r = await fetch('/api/watchlist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stock_id: id, stock_name: name, primary_tribe: tribe }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      showToast(`⭐ ${name} 已加入自選清單`);
+    } else {
+      showToast(d.error || '加入失敗');
+    }
+  } catch { showToast('加入失敗，請確認伺服器運行中'); }
+}
+
+// ── 渲染自選清單 ──────────────────────────────────────
+const SIGNAL_DOT = { green:'<span class="sig-dot dot-green"></span>', yellow:'<span class="sig-dot dot-yellow"></span>', red:'<span class="sig-dot dot-red"></span>', gray:'<span class="sig-dot dot-gray"></span>' };
+const TRIBE_ZH = { growth:'成長', trend:'趨勢', momentum:'短線', dividend:'存股' };
+
+async function loadWatchlist() {
+  showLoading();
+  document.querySelector('.section-title').textContent = '⭐ 自選清單';
+  try {
+    const [wlData, histData] = await Promise.all([
+      fetch('/api/watchlist').then(r => r.json()),
+      fetch('/api/accuracy').then(r => r.json()).catch(() => ({})),
+    ]);
+    renderWatchlist(wlData, histData);
+  } catch { showError(); }
+}
+
+function renderWatchlist(items, accuracy) {
+  const list = document.getElementById('stockList');
+  document.querySelector('.count-badge').textContent = `${items.length} 檔`;
+
+  // 績效統計列
+  const accHtml = Object.entries(accuracy).map(([tribe, a]) =>
+    `<span class="acc-item"><span class="acc-tribe">${TRIBE_ZH[tribe]}族</span> 綠燈後${a.holdDays}日均 <strong class="${a.avgReturn>=0?'green':'red'}">${a.avgReturn>=0?'+':''}${a.avgReturn}%</strong> <small>(${a.count}筆)</small></span>`
+  ).join('');
+
+  if (!items.length) {
+    list.innerHTML = `
+      ${accHtml ? `<div class="acc-panel">${accHtml}</div>` : ''}
+      <div class="loading-state">
+        <div class="error-icon">⭐</div>
+        <div class="loading-text">自選清單是空的</div>
+        <div class="loading-sub">在各族群列表中點擊 ⭐ 即可加入追蹤</div>
+      </div>`;
+    return;
+  }
+
+  const TRIBE_COLOR = { growth:'tribe-growth', trend:'tribe-trend', momentum:'tribe-momentum', dividend:'tribe-dividend' };
+  const TRIBE_FULL  = { growth:'成長族', trend:'趨勢族', momentum:'短線族', dividend:'存股族' };
+
+  const cardsHtml = items.map(w => {
+    const pt = w.primary_tribe;
+    // 主族群標籤（加入來源）
+    const tribeBadge = pt
+      ? `<span class="wl-tribe-badge ${TRIBE_COLOR[pt]||''}">${TRIBE_FULL[pt]||pt}</span>`
+      : '';
+
+    // 今日各族群燈號（以色點 + 分數呈現，不重複文字）
+    const sigs = w.currentSignals || {};
+    const sigRow = ['growth','trend','momentum','dividend'].map(t => {
+      if (!sigs[t]) return `<span class="wl-sig-cell sig-empty">${TRIBE_ZH[t]}<br><span class="sig-dash">—</span></span>`;
+      return `<span class="wl-sig-cell signal-${sigs[t].signal}">${TRIBE_ZH[t]}<br>${SIGNAL_DOT[sigs[t].signal]||''}<b>${sigs[t].score}</b></span>`;
+    }).join('');
+
+    // 加入時快照（只顯示主族群那個，其他折疊）
+    const addedSigs = w.added_signals || {};
+    const addedMain = pt && addedSigs[pt]
+      ? `${TRIBE_FULL[pt]} ${SIGNAL_DOT[addedSigs[pt].signal]||''} <b>${addedSigs[pt].score}分</b>`
+      : Object.entries(addedSigs).map(([t,s])=>`${TRIBE_ZH[t]} ${SIGNAL_DOT[s.signal]||''} ${s.score}`).join('　') || '—';
+
+    return `
+    <div class="stock-card wl-card">
+      <div class="stock-row">
+        <div class="stock-left" style="flex:0 0 auto;min-width:160px">
+          <div class="stock-logo wl-logo">⭐</div>
+          <div class="stock-info">
+            <div class="stock-name-row">
+              <span class="stock-name">${w.stock_name}</span>
+              <span class="stock-meta">${w.stock_id}</span>
+            </div>
+            <div style="margin-top:4px">${tribeBadge}</div>
+          </div>
+        </div>
+        <div class="wl-sig-grid">${sigRow}</div>
+        <div class="wl-added-col">
+          <div class="wl-added-label">加入時（${w.added_date}）</div>
+          <div class="wl-added-main">${addedMain}</div>
+        </div>
+        <div class="stock-right" style="flex:0 0 auto;gap:6px">
+          <button class="wl-history-btn" onclick="toggleHistory('${w.stock_id}','${w.stock_name}',this)">歷史</button>
+          <button class="wl-remove-btn" onclick="removeFromWatchlist(${w.id},'${w.stock_name}')">✕</button>
+        </div>
+      </div>
+      <div class="wl-history-panel" id="hist-${w.stock_id}" style="display:none"></div>
+    </div>`;
+  }).join('');
+
+  list.innerHTML = (accHtml ? `<div class="acc-panel">${accHtml}</div>` : '') + cardsHtml;
+  lucide.createIcons();
+}
+
+async function toggleHistory(stockId, name, btn) {
+  const panel = document.getElementById(`hist-${stockId}`);
+  if (panel.style.display !== 'none') { panel.style.display = 'none'; btn.textContent = '歷史'; return; }
+  btn.textContent = '收起';
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="padding:8px;color:#6B7280">載入中...</div>';
+  try {
+    const data = await fetch(`/api/history/${stockId}`).then(r => r.json());
+    if (!data.length) { panel.innerHTML = '<div style="padding:8px;color:#6B7280">尚無歷史資料（需先載入各族群產生快照）</div>'; return; }
+    const rows = data.slice(0, 30).map(d => {
+      const cells = ['growth','trend','momentum','dividend'].map(t => {
+        const s = d[t];
+        return `<td class="hist-cell ${s ? 'signal-'+s.signal : 'hist-empty'}">${s ? (SIGNAL_DOT[s.signal]||'')+' '+s.score : '—'}</td>`;
+      }).join('');
+      return `<tr><td class="hist-date">${d.date}</td>${cells}</tr>`;
+    }).join('');
+    panel.innerHTML = `<table class="hist-table">
+      <thead><tr><th>日期</th><th>成長</th><th>趨勢</th><th>短線</th><th>存股</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } catch { panel.innerHTML = '<div style="padding:8px;color:#EF4444">載入失敗</div>'; }
+}
+
+async function removeFromWatchlist(id, name) {
+  if (!confirm(`從自選清單移除 ${name}？`)) return;
+  await fetch(`/api/watchlist/${id}`, { method: 'DELETE' });
+  showToast(`已移除 ${name}`);
+  loadWatchlist();
+}
+
+function showToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:14px;transition:opacity .3s';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg; t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+// ── 顯示載入中 ────────────────────────────────────────
+function showLoading() {
+  document.getElementById('stockList').innerHTML = `
+    <div class="loading-state">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">載入中，首次約需 30 秒...</div>
+      <div class="loading-sub">正在從 FinMind 取得即時資料</div>
+    </div>`;
+}
+
+function showError() {
+  document.getElementById('stockList').innerHTML = `
+    <div class="error-state">
+      <div class="error-icon">⚠️</div>
+      <div class="error-msg">無法連線到本地伺服器</div>
+      <div class="error-hint">請先在終端機啟動：</div>
+      <div class="error-cmd">node server.js</div>
+      <div class="error-hint" style="margin-top:8px">啟動後重新整理頁面即可</div>
+    </div>`;
+}
+
+// ── 取得股票資料 ──────────────────────────────────────
+async function loadTribe(tribe) {
+  showLoading();
+  try {
+    const r = await fetch(`/api/stocks?tribe=${tribe}`);
+    if (!r.ok) throw new Error('server error');
+    const data = await r.json();
+    renderStocks(data, tribe);
+    document.querySelector('.count-badge').textContent = `${data.length} 檔`;
+  } catch {
+    showError();
+  }
+}
+
+// ── KPI 卡片真實資料 ──────────────────────────────────
+async function loadKPI() {
+  try {
+    const r = await fetch('/api/kpi');
+    if (!r.ok) return;
+    const d = await r.json();
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    set('kpiGrowthVal',    d.growth?.value    ?? '—');
+    set('kpiGrowthSub',    d.growth?.sub      ?? '');
+    set('kpiSentimentVal', d.sentiment?.value ?? '—');
+    set('kpiSentimentSub', d.sentiment?.sub   ?? '');
+    set('kpiSignalVal',    d.signals?.value   ?? '—');
+    set('kpiSignalSub',    d.signals?.sub     ?? '');
+    set('kpiWarnVal',      d.warning?.value   ?? '—');
+    set('kpiWarnSub',      d.warning?.sub     ?? '');
+    const subEl = document.getElementById('kpiSentimentSub');
+    if (subEl && d.sentiment?.trend) {
+      subEl.className = 'kpi-sub ' + (d.sentiment.trend === 'up' ? 'green' : d.sentiment.trend === 'down' ? 'red' : 'blue');
+    }
+  } catch {}
+}
+
+// ── 伺服器狀態輪詢 ───────────────────────────────────
+async function checkServerStatus() {
+  const el = document.getElementById('serverStatus');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/status', { signal: AbortSignal.timeout(3000) });
+    if (!r.ok) throw new Error();
+    const s = await r.json();
+    const callPct = Math.round(s.apiCallsToday / s.dailyLimit * 100);
+    const warn = callPct >= 80 ? ` ⚠️${callPct}%` : '';
+    el.className = 'server-status online';
+    el.querySelector('.status-text').textContent = `已連線 · 今日 ${s.apiCallsToday}/${s.dailyLimit}${warn}`;
+    el.title = `FinMind API · 快取 ${s.cacheEntries} 筆 · 點擊查看詳細後台狀態`;
+  } catch {
+    el.className = 'server-status offline';
+    el.querySelector('.status-text').textContent = '伺服器未啟動';
+    el.title = '請在終端機執行: node server.js';
+  }
+}
+
+// ── 強制重新整理（清快取）────────────────────────────
+async function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.style.opacity = '.5';
+  try { await fetch('/api/refresh'); } catch {}
+  await loadTribe(currentTribe);
+  await loadKPI();
+  btn.style.opacity = '1';
+  lucide.createIcons();
+}
+
+// ── 側欄連動 tab ─────────────────────────────────────
+function switchToWatchlist() {
+  activateNavItem('watchlist');
+  const tab = document.querySelector('.tab-item[data-tribe="watchlist"]');
+  if (tab) tab.click();
+}
+function switchTribe(tribe) {
+  activateNavItem(tribe);
+  const tab = document.querySelector(`.tab-item[data-tribe="${tribe}"]`);
+  if (tab) tab.click();
+}
+function activateNavItem(key) {
+  document.querySelectorAll('.nav-item[data-nav]').forEach(n => n.classList.remove('active'));
+  const target = document.querySelector(`.nav-item[data-nav="${key}"]`);
+  if (target) target.classList.add('active');
+}
+
+// ── 頁面初始化 ────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+
+  // 族群 tab 切換
+  document.querySelectorAll('.tab-item').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentTribe = tab.dataset.tribe;
+      if (currentTribe === 'watchlist') {
+        loadWatchlist();
+      } else {
+        const name = TRIBE_NAMES[currentTribe] || '成長族';
+        document.querySelector('.section-title').textContent = `${name} 篩選清單`;
+        loadTribe(currentTribe).then(loadKPI);
+      }
+    });
+  });
+
+  // Sidebar nav active 狀態
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      item.classList.add('active');
+    });
+  });
+
+  // 載入預設族群（成長族）+ KPI
+  loadTribe(currentTribe).then(loadKPI);
+
+  // 伺服器狀態：立即檢查 + 每 30 秒更新一次
+  checkServerStatus();
+  setInterval(checkServerStatus, 30000);
+});
+</script>
+</body>
+</html>

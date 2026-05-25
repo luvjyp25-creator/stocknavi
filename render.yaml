@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: stocknavi
+    runtime: node
+    buildCommand: ""
+    startCommand: node --no-warnings server.js
+    envVars:
+      - key: FINMIND_TOKEN
+        sync: false
+      - key: NODE_VERSION
+        value: 22.0.0
+    disk:
+      name: stocknavi-data
+      mountPath: /data
+      sizeGB: 1

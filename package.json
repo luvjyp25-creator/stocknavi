@@ -1,0 +1,12 @@
+{
+  "name": "stocknavi",
+  "version": "1.0.0",
+  "description": "StockNavi — Taiwan Stock AI Dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings server.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
