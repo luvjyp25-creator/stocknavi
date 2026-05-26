@@ -515,7 +515,14 @@ async function scoreMomentum(sid, name) {
     // 漲幅+收盤位置OK，只缺量能 → 黃燈提示
     signal = 'yellow'; tag = '漲強，待量能確認'; tagColor = 'amber';
   } else {
-    score = Math.min(score, 35); // 無任何有效條件，壓低分數
+    // 顯示缺少哪些條件，讓使用者知道差在哪
+    const miss = [];
+    if (!vol2x)     miss.push('量能');
+    if (chgP < 3)   miss.push('漲幅');
+    if (cpct < 0.6) miss.push('收位');
+    tag      = miss.length === 3 ? '今日無訊號' : `待${miss.join('+')}`;
+    tagColor = 'gray';
+    score    = Math.min(score, 35);
   }
 
   return { ...base, score, signal, tag, tagColor,
