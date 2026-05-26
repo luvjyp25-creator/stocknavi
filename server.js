@@ -293,10 +293,7 @@ function scoreLabel(score) {
 async function scoreGrowth(sid, name) {
   let score = 0;
   const det  = {};
-
-  // 收盤價（TWSE 免費；快取命中則無額外 API 消耗）
-  const priceRows = await twseStockPrice(sid, 1);
-  const close = priceRows.length ? priceRows.at(-1).close : null;
+  let close = null;
 
   // 1. 營收 YoY（35分） — 近12個月 vs 前12個月
   const revRaw = await finmind('TaiwanStockMonthRevenue', sid, daysAgo(800));
@@ -347,10 +344,12 @@ async function scoreGrowth(sid, name) {
     }
   }
 
-  // 3. PE 百分位（15分）
+  // 3. PE 百分位（15分）+ 收盤價（從 PER 資料取得，免額外呼叫）
   const peRaw = await finmind('TaiwanStockPER', sid, daysAgo(730));
   await sleep(250);
-  if (peRaw) {
+  if (peRaw?.length) {
+    const last = peRaw.at(-1);
+    close = last.close_price ? +last.close_price : null;
     const pers = peRaw.map(r => +r.PER).filter(v => v > 0);
     if (pers.length >= 20) {
       const cur = pers.at(-1);
@@ -539,15 +538,13 @@ async function scoreMomentum(sid, name) {
 // ── 存股族評分 ────────────────────────────────────────
 async function scoreDividend(sid, name) {
   let score = 0;
-
-  // 收盤價
-  const priceRows = await twseStockPrice(sid, 1);
-  const close = priceRows.length ? priceRows.at(-1).close : null;
+  let close = null;
 
   const peRaw = await finmind('TaiwanStockPER', sid, daysAgo(730));
   await sleep(250);
   let pePct = null;
-  if (peRaw) {
+  if (peRaw?.length) {
+    close = peRaw.at(-1).close_price ? +peRaw.at(-1).close_price : null;
     const pers = peRaw.map(r => +r.PER).filter(v => v > 0);
     if (pers.length >= 20) {
       const cur = pers.at(-1);
