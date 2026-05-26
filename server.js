@@ -633,37 +633,58 @@ const server = http.createServer(async (req, res) => {
   const p    = u.pathname;
   const qs   = u.searchParams;
 
-  // ── /api/kpi  (四個統計卡片的真實資料)
+  // ── /api/kpi?tribe=growth  (依目前族群顯示對應統計)
   if (p === '/api/kpi') {
-    // 從各族群快取統計燈號數量
-    let greenCount = 0, redCount = 0, topGrowth = null;
-    for (const tribe of ['growth','trend','momentum','dividend']) {
-      const data = fromCache(`tribe:${tribe}`);
+    const tribeFilter = qs.get('tribe');  // 前端切換族群時帶入
+    const TRIBE_ZH = { growth:'成長族', trend:'趨勢族', momentum:'短線族', dividend:'存股族' };
+    const tribes = (tribeFilter && TRIBE_ZH[tribeFilter])
+      ? [tribeFilter]
+      : ['growth','trend','momentum','dividend'];
+
+    let greenCount = 0, redCount = 0, topStock = null, topTribe = null;
+    for (const t of tribes) {
+      const data = fromCache(`tribe:${t}`);
       if (!data) continue;
       greenCount += data.filter(s => s.signal === 'green').length;
       redCount   += data.filter(s => s.signal === 'red').length;
-      if (tribe === 'growth' && !topGrowth) topGrowth = data.find(s => s.signal === 'green');
+      if (!topStock) {
+        const top = data.find(s => s.signal === 'green');
+        if (top) { topStock = top; topTribe = t; }
+      }
     }
 
-    // 市場情緒：TWSE 加權指數
+    // 市場情緒：TWSE 加權指數（永遠是全市場，不跟著族群切換）
     const taiex = await twseTaiex();
     let sentimentText = '市場資料更新中', sentimentSub = '今日資料載入中', sentimentTrend = 'neutral';
     if (taiex) {
-      const p = taiex.changePct;
-      if (p > 0.8)       { sentimentText = '市場偏多'; sentimentSub = `加權指數 +${p.toFixed(2)}%`; sentimentTrend = 'up'; }
-      else if (p < -0.8) { sentimentText = '市場偏空'; sentimentSub = `加權指數 ${p.toFixed(2)}%`; sentimentTrend = 'down'; }
-      else if (p >= 0)   { sentimentText = '市場平穩偏多'; sentimentSub = `加權指數 +${p.toFixed(2)}%`; sentimentTrend = 'up'; }
-      else               { sentimentText = '市場小幅整理'; sentimentSub = `加權指數 ${p.toFixed(2)}%`; sentimentTrend = 'down'; }
+      const cp = taiex.changePct;
+      if (cp > 0.8)       { sentimentText = '市場偏多'; sentimentSub = `加權指數 +${cp.toFixed(2)}%`; sentimentTrend = 'up'; }
+      else if (cp < -0.8) { sentimentText = '市場偏空'; sentimentSub = `加權指數 ${cp.toFixed(2)}%`; sentimentTrend = 'down'; }
+      else if (cp >= 0)   { sentimentText = '市場平穩偏多'; sentimentSub = `加權指數 +${cp.toFixed(2)}%`; sentimentTrend = 'up'; }
+      else                { sentimentText = '市場小幅整理'; sentimentSub = `加權指數 ${cp.toFixed(2)}%`; sentimentTrend = 'down'; }
     }
 
+    const label = tribeFilter ? TRIBE_ZH[tribeFilter] : '全族群';
+    const noDataSub = tribeFilter ? `載入${label}後顯示` : '請先選擇族群';
+
     return sendJson(res, {
-      growth: {
-        value: topGrowth ? `${topGrowth.name} 領跑` : (greenCount > 0 ? `${greenCount} 檔綠燈` : '成長股'),
-        sub:   topGrowth ? `${topGrowth.score}分 · ${topGrowth.sector}` : (greenCount > 0 ? 'AI / 伺服器偏強 ↑' : '載入成長族後顯示'),
+      tribe: tribeFilter || null,
+      topStock: topStock ? {
+        value: `${topStock.name} 領跑`,
+        sub:   `${TRIBE_ZH[topTribe]} ${topStock.score}分 · ${topStock.sector}`,
+      } : {
+        value: greenCount > 0 ? `${greenCount} 檔綠燈` : label,
+        sub:   greenCount > 0 ? `${label}偏強 ↑` : noDataSub,
       },
       sentiment: { value: sentimentText, sub: sentimentSub, trend: sentimentTrend },
-      signals:   { value: greenCount > 0 ? `${greenCount} 個綠燈` : '暫無綠燈訊號', sub: greenCount > 0 ? '跨族群訊號合計' : '等待訊號觸發' },
-      warning:   { value: redCount > 0 ? `${redCount} 個紅燈` : '無警示訊號', sub: redCount > 0 ? '請注意風險控管' : '風險可控' },
+      signals: {
+        value: greenCount > 0 ? `${greenCount} 個綠燈` : '暫無綠燈',
+        sub:   greenCount > 0 ? `${label}綠燈合計` : '等待訊號觸發',
+      },
+      warning: {
+        value: redCount > 0 ? `${redCount} 個紅燈` : '無警示訊號',
+        sub:   redCount > 0 ? `${label}請注意風險` : '風險可控',
+      },
       dataReady: greenCount + redCount > 0,
     });
   }

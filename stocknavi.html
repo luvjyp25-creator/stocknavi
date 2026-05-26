@@ -648,7 +648,7 @@
       <div class="kpi-grid">
         <div class="kpi-card growth">
           <div class="kpi-header">
-            <span class="kpi-label">成長股</span>
+            <span class="kpi-label" id="kpiTopLabel">成長族</span>
             <div class="kpi-icon purple"><i data-lucide="chart-column-increasing"></i></div>
           </div>
           <div class="kpi-value" id="kpiGrowthVal">—</div>
@@ -676,7 +676,7 @@
         </div>
         <div class="kpi-card signal">
           <div class="kpi-header">
-            <span class="kpi-label">今日訊號</span>
+            <span class="kpi-label" id="kpiSignalLabel">今日訊號</span>
             <div class="kpi-icon green"><i data-lucide="zap"></i></div>
           </div>
           <div class="kpi-value" id="kpiSignalVal">—</div>
@@ -690,7 +690,7 @@
         </div>
         <div class="kpi-card warning">
           <div class="kpi-header">
-            <span class="kpi-label">需注意</span>
+            <span class="kpi-label" id="kpiWarnLabel">需注意</span>
             <div class="kpi-icon amber"><i data-lucide="triangle-alert"></i></div>
           </div>
           <div class="kpi-value" id="kpiWarnVal">—</div>
@@ -994,20 +994,38 @@ async function loadTribe(tribe) {
 }
 
 // ── KPI 卡片真實資料 ──────────────────────────────────
-async function loadKPI() {
+const TRIBE_NAMES_ZH = { growth:'成長族', trend:'趨勢族', momentum:'短線族', dividend:'存股族' };
+
+async function loadKPI(tribe) {
   try {
-    const r = await fetch('/api/kpi');
+    const url = tribe && tribe !== 'watchlist' ? `/api/kpi?tribe=${tribe}` : '/api/kpi';
+    const r = await fetch(url);
     if (!r.ok) return;
     const d = await r.json();
+
+    // 更新標籤文字反映目前族群
+    const tribeZH = TRIBE_NAMES_ZH[tribe] || '全族群';
+    const setLabel = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    if (tribe && tribe !== 'watchlist') {
+      setLabel('kpiTopLabel',    tribeZH);
+      setLabel('kpiSignalLabel', `${tribeZH} 綠燈`);
+      setLabel('kpiWarnLabel',   `${tribeZH} 紅燈`);
+    } else {
+      setLabel('kpiTopLabel',    '領跑股');
+      setLabel('kpiSignalLabel', '今日訊號');
+      setLabel('kpiWarnLabel',   '需注意');
+    }
+
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-    set('kpiGrowthVal',    d.growth?.value    ?? '—');
-    set('kpiGrowthSub',    d.growth?.sub      ?? '');
-    set('kpiSentimentVal', d.sentiment?.value ?? '—');
-    set('kpiSentimentSub', d.sentiment?.sub   ?? '');
-    set('kpiSignalVal',    d.signals?.value   ?? '—');
-    set('kpiSignalSub',    d.signals?.sub     ?? '');
-    set('kpiWarnVal',      d.warning?.value   ?? '—');
-    set('kpiWarnSub',      d.warning?.sub     ?? '');
+    set('kpiGrowthVal',    d.topStock?.value    ?? '—');
+    set('kpiGrowthSub',    d.topStock?.sub      ?? '');
+    set('kpiSentimentVal', d.sentiment?.value   ?? '—');
+    set('kpiSentimentSub', d.sentiment?.sub     ?? '');
+    set('kpiSignalVal',    d.signals?.value     ?? '—');
+    set('kpiSignalSub',    d.signals?.sub       ?? '');
+    set('kpiWarnVal',      d.warning?.value     ?? '—');
+    set('kpiWarnSub',      d.warning?.sub       ?? '');
+
     const subEl = document.getElementById('kpiSentimentSub');
     if (subEl && d.sentiment?.trend) {
       subEl.className = 'kpi-sub ' + (d.sentiment.trend === 'up' ? 'green' : d.sentiment.trend === 'down' ? 'red' : 'blue');
@@ -1041,7 +1059,7 @@ async function refreshData() {
   btn.style.opacity = '.5';
   try { await fetch('/api/refresh'); } catch {}
   await loadTribe(currentTribe);
-  await loadKPI();
+  await loadKPI(currentTribe);
   btn.style.opacity = '1';
   lucide.createIcons();
 }
@@ -1075,10 +1093,11 @@ window.addEventListener('DOMContentLoaded', () => {
       currentTribe = tab.dataset.tribe;
       if (currentTribe === 'watchlist') {
         loadWatchlist();
+        loadKPI('watchlist');
       } else {
         const name = TRIBE_NAMES[currentTribe] || '成長族';
         document.querySelector('.section-title').textContent = `${name} 篩選清單`;
-        loadTribe(currentTribe).then(loadKPI);
+        loadTribe(currentTribe).then(() => loadKPI(currentTribe));
       }
     });
   });
@@ -1092,7 +1111,7 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   // 載入預設族群（成長族）+ KPI
-  loadTribe(currentTribe).then(loadKPI);
+  loadTribe(currentTribe).then(() => loadKPI(currentTribe));
 
   // 伺服器狀態：立即檢查 + 每 30 秒更新一次
   checkServerStatus();
