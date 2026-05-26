@@ -814,51 +814,53 @@ function renderStocks(stocks, tribe) {
   lucide.createIcons();
 }
 
-// ── 加入自選清單 ─────────────────────────────────────
-async function addToWatchlist(id, name, tribe) {
-  try {
-    const r = await fetch('/api/watchlist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stock_id: id, stock_name: name, primary_tribe: tribe }),
-    });
-    const d = await r.json();
-    if (d.ok) {
-      showToast(`⭐ ${name} 已加入自選清單`);
-    } else {
-      showToast(d.error || '加入失敗');
-    }
-  } catch { showToast('加入失敗，請確認伺服器運行中'); }
-}
-
-// ── 渲染自選清單 ──────────────────────────────────────
+// ── 自選清單（localStorage）──────────────────────────
+const WL_KEY = 'stocknavi_watchlist';
 const SIGNAL_DOT = { green:'<span class="sig-dot dot-green"></span>', yellow:'<span class="sig-dot dot-yellow"></span>', red:'<span class="sig-dot dot-red"></span>', gray:'<span class="sig-dot dot-gray"></span>' };
 const TRIBE_ZH = { growth:'成長', trend:'趨勢', momentum:'短線', dividend:'存股' };
+
+function getWatchlist() {
+  try { return JSON.parse(localStorage.getItem(WL_KEY) || '[]'); } catch { return []; }
+}
+
+function saveWatchlist(items) {
+  localStorage.setItem(WL_KEY, JSON.stringify(items));
+}
+
+function addToWatchlist(id, name, tribe) {
+  const items = getWatchlist();
+  if (items.some(w => w.stock_id === id)) {
+    showToast(`${name} 已在自選清單中`);
+    return;
+  }
+  items.push({
+    id: Date.now(),
+    stock_id: id,
+    stock_name: name,
+    added_date: new Date().toISOString().slice(0, 10),
+    primary_tribe: tribe || null,
+  });
+  items.sort((a, b) => parseInt(a.stock_id) - parseInt(b.stock_id));
+  saveWatchlist(items);
+  showToast(`⭐ ${name} 已加入自選清單`);
+}
 
 async function loadWatchlist() {
   showLoading();
   document.querySelector('.section-title').textContent = '⭐ 自選清單';
-  try {
-    const [wlData, histData] = await Promise.all([
-      fetch('/api/watchlist').then(r => r.json()),
-      fetch('/api/accuracy').then(r => r.json()).catch(() => ({})),
-    ]);
-    renderWatchlist(wlData, histData);
-  } catch { showError(); }
+  const items = getWatchlist();
+  if (!items.length) { renderWatchlist(items, {}); return; }
+  const ids = items.map(w => w.stock_id).join(',');
+  const signals = await fetch(`/api/signals?ids=${ids}`).then(r => r.json()).catch(() => ({}));
+  renderWatchlist(items, signals);
 }
 
-function renderWatchlist(items, accuracy) {
+function renderWatchlist(items, signals) {
   const list = document.getElementById('stockList');
   document.querySelector('.count-badge').textContent = `${items.length} 檔`;
 
-  // 績效統計列
-  const accHtml = Object.entries(accuracy).map(([tribe, a]) =>
-    `<span class="acc-item"><span class="acc-tribe">${TRIBE_ZH[tribe]}族</span> 綠燈後${a.holdDays}日均 <strong class="${a.avgReturn>=0?'green':'red'}">${a.avgReturn>=0?'+':''}${a.avgReturn}%</strong> <small>(${a.count}筆)</small></span>`
-  ).join('');
-
   if (!items.length) {
     list.innerHTML = `
-      ${accHtml ? `<div class="acc-panel">${accHtml}</div>` : ''}
       <div class="loading-state">
         <div class="error-icon">⭐</div>
         <div class="loading-text">自選清單是空的</div>
@@ -872,23 +874,15 @@ function renderWatchlist(items, accuracy) {
 
   const cardsHtml = items.map(w => {
     const pt = w.primary_tribe;
-    // 主族群標籤（加入來源）
     const tribeBadge = pt
       ? `<span class="wl-tribe-badge ${TRIBE_COLOR[pt]||''}">${TRIBE_FULL[pt]||pt}</span>`
       : '';
 
-    // 今日各族群燈號（以色點 + 分數呈現，不重複文字）
-    const sigs = w.currentSignals || {};
+    const sigs = signals[w.stock_id] || {};
     const sigRow = ['growth','trend','momentum','dividend'].map(t => {
       if (!sigs[t]) return `<span class="wl-sig-cell sig-empty">${TRIBE_ZH[t]}<br><span class="sig-dash">—</span></span>`;
       return `<span class="wl-sig-cell signal-${sigs[t].signal}">${TRIBE_ZH[t]}<br>${SIGNAL_DOT[sigs[t].signal]||''}<b>${sigs[t].score}</b></span>`;
     }).join('');
-
-    // 加入時快照（只顯示主族群那個，其他折疊）
-    const addedSigs = w.added_signals || {};
-    const addedMain = pt && addedSigs[pt]
-      ? `${TRIBE_FULL[pt]} ${SIGNAL_DOT[addedSigs[pt].signal]||''} <b>${addedSigs[pt].score}分</b>`
-      : Object.entries(addedSigs).map(([t,s])=>`${TRIBE_ZH[t]} ${SIGNAL_DOT[s.signal]||''} ${s.score}`).join('　') || '—';
 
     return `
     <div class="stock-card wl-card">
@@ -905,8 +899,8 @@ function renderWatchlist(items, accuracy) {
         </div>
         <div class="wl-sig-grid">${sigRow}</div>
         <div class="wl-added-col">
-          <div class="wl-added-label">加入時（${w.added_date}）</div>
-          <div class="wl-added-main">${addedMain}</div>
+          <div class="wl-added-label">加入日期</div>
+          <div class="wl-added-main">${w.added_date}</div>
         </div>
         <div class="stock-right" style="flex:0 0 auto;gap:6px">
           <button class="wl-history-btn" onclick="toggleHistory('${w.stock_id}','${w.stock_name}',this)">歷史</button>
@@ -917,7 +911,7 @@ function renderWatchlist(items, accuracy) {
     </div>`;
   }).join('');
 
-  list.innerHTML = (accHtml ? `<div class="acc-panel">${accHtml}</div>` : '') + cardsHtml;
+  list.innerHTML = cardsHtml;
   lucide.createIcons();
 }
 
@@ -944,9 +938,9 @@ async function toggleHistory(stockId, name, btn) {
   } catch { panel.innerHTML = '<div style="padding:8px;color:#EF4444">載入失敗</div>'; }
 }
 
-async function removeFromWatchlist(id, name) {
+function removeFromWatchlist(id, name) {
   if (!confirm(`從自選清單移除 ${name}？`)) return;
-  await fetch(`/api/watchlist/${id}`, { method: 'DELETE' });
+  saveWatchlist(getWatchlist().filter(w => w.id !== id));
   showToast(`已移除 ${name}`);
   loadWatchlist();
 }

@@ -32,17 +32,6 @@ db.exec(`
     created_at  TEXT DEFAULT (datetime('now','localtime')),
     UNIQUE(date, tribe, stock_id)
   );
-  CREATE TABLE IF NOT EXISTS watchlist (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    stock_id      TEXT NOT NULL UNIQUE,
-    stock_name    TEXT NOT NULL,
-    added_date    TEXT NOT NULL,
-    added_price   REAL,
-    primary_tribe TEXT,
-    added_signals TEXT,
-    note          TEXT,
-    created_at    TEXT DEFAULT (datetime('now','localtime'))
-  );
   CREATE INDEX IF NOT EXISTS idx_ds_date_tribe ON daily_signals(date, tribe);
   CREATE INDEX IF NOT EXISTS idx_ds_stock ON daily_signals(stock_id, date);
 `);
@@ -740,60 +729,6 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // ── /api/watchlist  GET / POST
-  if (p === '/api/watchlist') {
-    if (req.method === 'GET') {
-      const rows = db.prepare('SELECT * FROM watchlist ORDER BY CAST(stock_id AS INTEGER) ASC').all();
-      const today = new Date().toISOString().slice(0, 10);
-      // 附上今日各族群最新燈號
-      const enriched = rows.map(w => {
-        const sigs = {};
-        for (const tribe of ['growth','trend','momentum','dividend']) {
-          const row = db.prepare(
-            'SELECT signal, score, tag FROM daily_signals WHERE stock_id=? AND tribe=? ORDER BY date DESC LIMIT 1'
-          ).get(w.stock_id, tribe);
-          if (row) sigs[tribe] = row;
-        }
-        // 今日漲跌（從 price cache）
-        const priceKey = `twse_day:${w.stock_id}:${today.slice(0,7).replace('-','')+'01'}`;
-        return { ...w, added_signals: w.added_signals ? JSON.parse(w.added_signals) : {}, currentSignals: sigs };
-      });
-      return sendJson(res, enriched);
-    }
-    if (req.method === 'POST') {
-      let body = '';
-      req.on('data', c => body += c);
-      req.on('end', () => {
-        try {
-          const { stock_id, stock_name, note, primary_tribe } = JSON.parse(body);
-          if (!stock_id || !stock_name) return sendJson(res, { error: 'stock_id and stock_name required' }, 400);
-          const today = new Date().toISOString().slice(0, 10);
-          const snapshotSigs = {};
-          for (const tribe of ['growth','trend','momentum','dividend']) {
-            const row = db.prepare(
-              'SELECT signal, score, tag FROM daily_signals WHERE stock_id=? AND tribe=? ORDER BY date DESC LIMIT 1'
-            ).get(stock_id, tribe);
-            if (row) snapshotSigs[tribe] = row;
-          }
-          db.prepare(
-            'INSERT OR IGNORE INTO watchlist(stock_id, stock_name, added_date, primary_tribe, added_signals, note) VALUES(?,?,?,?,?,?)'
-          ).run(stock_id, stock_name, today, primary_tribe || null, JSON.stringify(snapshotSigs), note || '');
-          addLog(`⭐ 加入自選：${stock_name}(${stock_id}) [${primary_tribe||'—'}]`);
-          return sendJson(res, { ok: true });
-        } catch (e) { return sendJson(res, { error: e.message }, 400); }
-      });
-      return;
-    }
-    return sendJson(res, { error: 'method not allowed' }, 405);
-  }
-
-  // ── /api/watchlist/:id  DELETE
-  const wlMatch = p.match(/^\/api\/watchlist\/(\d+)$/);
-  if (wlMatch && req.method === 'DELETE') {
-    db.prepare('DELETE FROM watchlist WHERE id=?').run(Number(wlMatch[1]));
-    return sendJson(res, { ok: true });
-  }
-
   // ── /api/history/:stock_id  個股歷史燈號（近 60 日）
   const histMatch = p.match(/^\/api\/history\/(\w+)$/);
   if (histMatch) {
@@ -813,35 +748,21 @@ const server = http.createServer(async (req, res) => {
     return sendJson(res, Object.values(byDate).sort((a,b) => b.date.localeCompare(a.date)));
   }
 
-  // ── /api/accuracy  追蹤績效統計
-  if (p === '/api/accuracy') {
-    const results = {};
-    for (const tribe of ['growth','trend','momentum','dividend']) {
-      const holdDays = { growth: 10, trend: 20, momentum: 5, dividend: 10 }[tribe];
-      // 取加入時為綠燈的自選股歷史訊號
-      const rows = db.prepare(`
-        SELECT w.stock_id, w.added_date, ds_entry.close_price AS entry_price,
-               ds_exit.close_price AS exit_price
-        FROM watchlist w
-        JOIN daily_signals ds_entry ON ds_entry.stock_id=w.stock_id
-          AND ds_entry.tribe=? AND ds_entry.date=w.added_date AND ds_entry.signal='green'
-        LEFT JOIN (
-          SELECT stock_id, close_price, date,
-            ROW_NUMBER() OVER(PARTITION BY stock_id ORDER BY date) rn
-          FROM daily_signals WHERE tribe=?
-        ) ds_exit ON ds_exit.stock_id=w.stock_id AND ds_exit.rn=?
-        WHERE ds_entry.close_price IS NOT NULL AND ds_exit.close_price IS NOT NULL
-      `).all(tribe, tribe, holdDays);
-      if (rows.length >= 3) {
-        const rets = rows.map(r => (r.exit_price - r.entry_price) / r.entry_price * 100);
-        results[tribe] = {
-          count: rows.length,
-          avgReturn: +(rets.reduce((s,v)=>s+v,0)/rets.length).toFixed(2),
-          holdDays,
-        };
+  // ── /api/signals?ids=2330,2454  取各股最新燈號（供前端自選清單用）
+  if (p === '/api/signals') {
+    const ids = (qs.get('ids') || '').split(',').map(s => s.trim()).filter(Boolean);
+    const result = {};
+    for (const sid of ids) {
+      const sigs = {};
+      for (const tribe of ['growth','trend','momentum','dividend']) {
+        const row = db.prepare(
+          'SELECT signal, score, tag FROM daily_signals WHERE stock_id=? AND tribe=? ORDER BY date DESC LIMIT 1'
+        ).get(sid, tribe);
+        if (row) sigs[tribe] = row;
       }
+      if (Object.keys(sigs).length) result[sid] = sigs;
     }
-    return sendJson(res, results);
+    return sendJson(res, result);
   }
 
   // ── 靜態檔案

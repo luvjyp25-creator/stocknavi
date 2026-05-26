@@ -9,7 +9,3 @@ services:
         sync: false
       - key: NODE_VERSION
         value: 22.0.0
-    disk:
-      name: stocknavi-data
-      mountPath: /data
-      sizeGB: 1
