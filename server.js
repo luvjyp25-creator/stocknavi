@@ -294,6 +294,10 @@ async function scoreGrowth(sid, name) {
   let score = 0;
   const det  = {};
 
+  // 收盤價（TWSE 免費；快取命中則無額外 API 消耗）
+  const priceRows = await twseStockPrice(sid, 1);
+  const close = priceRows.length ? priceRows.at(-1).close : null;
+
   // 1. 營收 YoY（35分） — 近12個月 vs 前12個月
   const revRaw = await finmind('TaiwanStockMonthRevenue', sid, daysAgo(800));
   await sleep(250);
@@ -382,7 +386,8 @@ async function scoreGrowth(sid, name) {
 
   return { id: sid, name, sector: SECTOR[sid] || '', score, ...lbl,
            thermoPct: thermo.pct, thermoLabel: thermo.label, thermoColor: thermo.color,
-           desc, aiNote, revYoy: det.revYoy ?? null, epsGrowth: det.epsGrowth ?? null, pePct: det.pePct ?? null };
+           desc, aiNote, revYoy: det.revYoy ?? null, epsGrowth: det.epsGrowth ?? null,
+           pePct: det.pePct ?? null, close };
 }
 
 // ── 趨勢族評分（TWSE優先，PRD v1.2 邏輯）─────────────
@@ -467,14 +472,14 @@ async function scoreTrend(sid, name) {
 
   return { id: sid, name, sector: SECTOR[sid]||'', score, signal, tag, tagColor,
            thermoPct: 50, thermoLabel: '—', thermoColor: 'amber',
-           desc, aiNote: null, volMultiple, chgPct: Number(chgP) };
+           desc, aiNote: null, volMultiple, chgPct: Number(chgP), close: sorted.at(-1).close };
 }
 
 // ── 短線族評分（TWSE優先，PRD Phase 1）──────────────
 async function scoreMomentum(sid, name) {
   const base = { id: sid, name, sector: SECTOR[sid]||'', score: 0, signal: 'gray',
                  tag: '無訊號', tagColor: 'amber', thermoPct: 50,
-                 thermoLabel: '—', thermoColor: 'amber', desc: '今日未觸發訊號', aiNote: null };
+                 thermoLabel: '—', thermoColor: 'amber', desc: '今日未觸發訊號', aiNote: null, close: null };
 
   // 價格資料 → TWSE 優先（最近 2 個月即可）
   let rows = await twseStockPrice(sid, 2);
@@ -528,12 +533,16 @@ async function scoreMomentum(sid, name) {
   return { ...base, score, signal, tag, tagColor,
            thermoPct: Math.min(Math.round(cpct*100), 96), thermoLabel: `收盤位置 ${(cpct*100).toFixed(0)}%`,
            thermoColor: cpct >= 0.6 ? 'green' : cpct >= 0.4 ? 'amber' : 'red',
-           desc, volRatio: +volRat.toFixed(2), chgPct: +chgP.toFixed(2) };
+           desc, volRatio: +volRat.toFixed(2), chgPct: +chgP.toFixed(2), close: today.close };
 }
 
 // ── 存股族評分 ────────────────────────────────────────
 async function scoreDividend(sid, name) {
   let score = 0;
+
+  // 收盤價
+  const priceRows = await twseStockPrice(sid, 1);
+  const close = priceRows.length ? priceRows.at(-1).close : null;
 
   const peRaw = await finmind('TaiwanStockPER', sid, daysAgo(730));
   await sleep(250);
@@ -584,7 +593,7 @@ async function scoreDividend(sid, name) {
 
   return { id: sid, name, sector: SECTOR[sid] || '', score, signal, tag, tagColor,
            thermoPct: thermo.pct, thermoLabel: thermo.label, thermoColor: thermo.color,
-           desc, aiNote: null, pePct };
+           desc, aiNote: null, pePct, close };
 }
 
 // ── 計算整族 ──────────────────────────────────────────

@@ -1079,13 +1079,13 @@ async function exportAllExcel() {
     );
 
     // 組合成單一列表
-    const headers = ['日期', '族群', '代號', '名稱', '產業', '分數', '燈號', '標籤', '說明'];
+    const headers = ['日期', '族群', '代號', '名稱', '產業', '收盤價', '分數', '燈號', '標籤', '說明'];
     const dataRows = [];
     TRIBE_LIST.forEach((t, i) => {
       for (const s of (results[i] || [])) {
         dataRows.push([
           today, TRIBE_ZH[t], s.id, s.name, s.sector || '',
-          s.score, SIG_ZH[s.signal] || s.signal,
+          s.close ?? '', s.score, SIG_ZH[s.signal] || s.signal,
           s.tag || '', s.desc || '',
         ]);
       }
@@ -1095,7 +1095,7 @@ async function exportAllExcel() {
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
     ws['!cols'] = [
       {wch:12}, {wch:8}, {wch:6}, {wch:10}, {wch:12},
-      {wch:5},  {wch:6}, {wch:18}, {wch:40},
+      {wch:8},  {wch:5}, {wch:6}, {wch:18}, {wch:40},
     ];
     // 凍結第一列（表頭）
     ws['!freeze'] = { xSplit: 0, ySplit: 1 };
