@@ -711,6 +711,7 @@
             <span class="section-title">成長族 篩選清單</span>
             <span class="count-badge">6 檔</span>
           </div>
+          <button class="refresh-btn" id="exportBtn" onclick="exportCSV()" style="margin-right:8px"><i data-lucide="download"></i>匯出 CSV</button>
           <button class="refresh-btn" id="refreshBtn" onclick="refreshData()"><i data-lucide="refresh-cw"></i>重新整理</button>
         </div>
 
@@ -761,6 +762,7 @@ let currentTribe = 'growth';
 
 // ── 渲染股票卡片 ──────────────────────────────────────
 function renderStocks(stocks, tribe) {
+  _lastStockData = stocks || [];  // 暫存供匯出用
   const list = document.getElementById('stockList');
   if (!stocks || !stocks.length) {
     list.innerHTML = `<div class="loading-state"><div class="error-icon">📭</div>
@@ -1051,6 +1053,60 @@ async function checkServerStatus() {
     el.querySelector('.status-text').textContent = '伺服器未啟動';
     el.title = '請在終端機執行: node server.js';
   }
+}
+
+// ── 匯出 CSV ──────────────────────────────────────────
+let _lastStockData = [];  // 暫存最近一次載入的股票資料
+
+function exportCSV() {
+  if (currentTribe === 'watchlist') {
+    exportWatchlistCSV();
+    return;
+  }
+  if (!_lastStockData.length) {
+    showToast('請先載入族群資料再匯出');
+    return;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const TRIBE_ZH = { growth:'成長族', trend:'趨勢族', momentum:'短線族', dividend:'存股族' };
+  const SIG_ZH   = { green:'綠燈', yellow:'黃燈', amber:'黃燈', red:'紅燈', gray:'無訊號' };
+
+  const rows = [
+    ['日期', '族群', '代號', '名稱', '產業', '分數', '燈號', '標籤', '說明'],
+    ..._lastStockData.map(s => [
+      today,
+      TRIBE_ZH[currentTribe] || currentTribe,
+      s.id, s.name, s.sector || '',
+      s.score, SIG_ZH[s.signal] || s.signal,
+      s.tag || '', s.desc || '',
+    ]),
+  ];
+
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv, ], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `StockNavi_${TRIBE_ZH[currentTribe]||currentTribe}_${today}.csv`;
+  a.click();
+  showToast(`已匯出 ${_lastStockData.length} 筆資料`);
+}
+
+function exportWatchlistCSV() {
+  const items = getWatchlist();
+  if (!items.length) { showToast('自選清單是空的'); return; }
+  const today = new Date().toISOString().slice(0, 10);
+  const TRIBE_FULL = { growth:'成長族', trend:'趨勢族', momentum:'短線族', dividend:'存股族' };
+  const rows = [
+    ['匯出日期', '代號', '名稱', '族群', '加入日期'],
+    ...items.map(w => [today, w.stock_id, w.stock_name, TRIBE_FULL[w.primary_tribe] || '—', w.added_date]),
+  ];
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `StockNavi_自選清單_${today}.csv`;
+  a.click();
+  showToast(`已匯出 ${items.length} 筆自選清單`);
 }
 
 // ── 強制重新整理（清快取）────────────────────────────
