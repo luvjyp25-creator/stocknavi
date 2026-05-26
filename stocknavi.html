@@ -354,6 +354,12 @@
     .stock-score.blue  { color: var(--blue); }
     .stock-score.amber { color: var(--amber); }
     .stock-arrow svg { width: 16px; height: 16px; color: #CBD5E1; }
+    .stock-price {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+      min-width: 64px;
+    }
+    .stock-price-label { font-size: 10px; color: var(--text-4); }
+    .stock-price-val   { font-size: 15px; font-weight: 700; color: var(--text-1); letter-spacing: -.3px; }
     .ai-note {
       display: flex; align-items: flex-start; gap: 10px;
       background: #F8FAFC; border-radius: 8px;
@@ -801,6 +807,10 @@ function renderStocks(stocks, tribe) {
           <div class="thermo-ticks"><span>極低</span><span>合理</span><span>偏熱</span></div>
         </div>
         <div class="stock-right">
+          <div class="stock-price">
+            <span class="stock-price-label">收盤價</span>
+            <span class="stock-price-val">${s.close != null ? s.close.toLocaleString('zh-TW') : '—'}</span>
+          </div>
           <div class="stock-tag ${s.tagColor}">
             <i data-lucide="${iconMap[s.signal] || 'minus'}"></i>${s.tag}
           </div>
