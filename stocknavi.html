@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <style>
     :root {
       --bg: #F4F6FB;
@@ -711,7 +712,7 @@
             <span class="section-title">成長族 篩選清單</span>
             <span class="count-badge">6 檔</span>
           </div>
-          <button class="refresh-btn" id="exportBtn" onclick="exportCSV()" style="margin-right:8px"><i data-lucide="download"></i>匯出 CSV</button>
+          <button class="refresh-btn" id="exportBtn" onclick="exportAllExcel()" style="margin-right:8px"><i data-lucide="download"></i>匯出 Excel</button>
           <button class="refresh-btn" id="refreshBtn" onclick="refreshData()"><i data-lucide="refresh-cw"></i>重新整理</button>
         </div>
 
@@ -1055,58 +1056,72 @@ async function checkServerStatus() {
   }
 }
 
-// ── 匯出 CSV ──────────────────────────────────────────
-let _lastStockData = [];  // 暫存最近一次載入的股票資料
+// ── 匯出 Excel（全族群，同一頁）────────────────────────
+let _lastStockData = [];
 
-function exportCSV() {
-  if (currentTribe === 'watchlist') {
-    exportWatchlistCSV();
-    return;
-  }
-  if (!_lastStockData.length) {
-    showToast('請先載入族群資料再匯出');
-    return;
-  }
+async function exportAllExcel() {
+  if (typeof XLSX === 'undefined') { showToast('Excel 函式庫載入中，請稍後再試'); return; }
+
+  const btn = document.getElementById('exportBtn');
+  btn.style.opacity = '.5';
+  btn.setAttribute('disabled', true);
+  showToast('正在載入所有族群資料，請稍候...');
+
+  const TRIBE_LIST = ['growth', 'trend', 'momentum', 'dividend'];
+  const TRIBE_ZH   = { growth:'成長族', trend:'趨勢族', momentum:'短線族', dividend:'存股族' };
+  const SIG_ZH     = { green:'綠燈', yellow:'黃燈', amber:'黃燈', red:'紅燈', gray:'無訊號' };
   const today = new Date().toISOString().slice(0, 10);
-  const TRIBE_ZH = { growth:'成長族', trend:'趨勢族', momentum:'短線族', dividend:'存股族' };
-  const SIG_ZH   = { green:'綠燈', yellow:'黃燈', amber:'黃燈', red:'紅燈', gray:'無訊號' };
 
-  const rows = [
-    ['日期', '族群', '代號', '名稱', '產業', '分數', '燈號', '標籤', '說明'],
-    ..._lastStockData.map(s => [
-      today,
-      TRIBE_ZH[currentTribe] || currentTribe,
-      s.id, s.name, s.sector || '',
-      s.score, SIG_ZH[s.signal] || s.signal,
-      s.tag || '', s.desc || '',
-    ]),
-  ];
+  try {
+    // 四族群並行抓取（伺服器有快取，已載入過的族群幾乎瞬間回來）
+    const results = await Promise.all(
+      TRIBE_LIST.map(t => fetch(`/api/stocks?tribe=${t}`).then(r => r.json()).catch(() => []))
+    );
 
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['﻿' + csv, ], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `StockNavi_${TRIBE_ZH[currentTribe]||currentTribe}_${today}.csv`;
-  a.click();
-  showToast(`已匯出 ${_lastStockData.length} 筆資料`);
-}
+    // 組合成單一列表
+    const headers = ['日期', '族群', '代號', '名稱', '產業', '分數', '燈號', '標籤', '說明'];
+    const dataRows = [];
+    TRIBE_LIST.forEach((t, i) => {
+      for (const s of (results[i] || [])) {
+        dataRows.push([
+          today, TRIBE_ZH[t], s.id, s.name, s.sector || '',
+          s.score, SIG_ZH[s.signal] || s.signal,
+          s.tag || '', s.desc || '',
+        ]);
+      }
+    });
 
-function exportWatchlistCSV() {
-  const items = getWatchlist();
-  if (!items.length) { showToast('自選清單是空的'); return; }
-  const today = new Date().toISOString().slice(0, 10);
-  const TRIBE_FULL = { growth:'成長族', trend:'趨勢族', momentum:'短線族', dividend:'存股族' };
-  const rows = [
-    ['匯出日期', '代號', '名稱', '族群', '加入日期'],
-    ...items.map(w => [today, w.stock_id, w.stock_name, TRIBE_FULL[w.primary_tribe] || '—', w.added_date]),
-  ];
-  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `StockNavi_自選清單_${today}.csv`;
-  a.click();
-  showToast(`已匯出 ${items.length} 筆自選清單`);
+    // 建立 Excel 工作表
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    ws['!cols'] = [
+      {wch:12}, {wch:8}, {wch:6}, {wch:10}, {wch:12},
+      {wch:5},  {wch:6}, {wch:18}, {wch:40},
+    ];
+    // 凍結第一列（表頭）
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    // 自選清單放第二頁
+    const wl = getWatchlist();
+    const wlHeaders = ['加入日期', '代號', '名稱', '族群'];
+    const wlRows = wl.map(w => [
+      w.added_date, w.stock_id, w.stock_name,
+      TRIBE_ZH[w.primary_tribe] || '—',
+    ]);
+    const ws2 = XLSX.utils.aoa_to_sheet([wlHeaders, ...wlRows]);
+    ws2['!cols'] = [{wch:12},{wch:6},{wch:10},{wch:8}];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws,  '每日選股');
+    XLSX.utils.book_append_sheet(wb, ws2, '自選清單');
+
+    XLSX.writeFile(wb, `StockNavi_${today}.xlsx`);
+    showToast(`✅ 已匯出 ${dataRows.length} 筆資料（${today}）`);
+  } catch (e) {
+    showToast('匯出失敗：' + e.message);
+  }
+
+  btn.style.opacity = '1';
+  btn.removeAttribute('disabled');
 }
 
 // ── 強制重新整理（清快取）────────────────────────────
