@@ -624,6 +624,14 @@ async function computeTribe(tribe) {
   _stats.tribeLastUpdate[tribe] = new Date().toISOString();
   addLog(`✅ ${tribeName} 完成，今日 API 呼叫: ${_stats.apiCallsToday} 次`);
   const sorted = results.sort((a, b) => b.score - a.score);
+
+  // 補充收盤價：若個別評分函式未能取得，統一用 TWSE 快取補上
+  for (const s of sorted) {
+    if (s.close) continue;
+    const rows = await twseStockPrice(s.id, 1);  // 幾乎都是快取命中，無額外 API 消耗
+    if (rows.length) s.close = rows.at(-1).close;
+  }
+
   // 每次計算完自動存入 SQLite
   const today = new Date().toISOString().slice(0, 10);
   saveSignals(today, tribe, sorted);
